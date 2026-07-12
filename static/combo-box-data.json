@@ -1,22 +1,19 @@
 {
     "team": [
-        "AGSVWEB",
-        "AGSVMUS",
-        "AGSVPT",
-        "GodDramas",
-        "CatEDU",
+        "LongWeb",
+        "LongPT",
+        "LongA",
         "Pack",
         ""
     ],
     "source": [
+	    "DSNP WEB-DL",
         "WEB-DL",
         "Remux",
         "Blu-ray",
         "UHD Blu-ray",
         "Blu-ray Remux",
         "UHD Blu-ray Remux",
-        "HDTV",
-        "DVD",
         ""
     ],
     "playlet-source": [

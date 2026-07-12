@@ -808,12 +808,17 @@ def delete_season_number(title, season_number):
     # 仅移除位于标题末尾的季数后缀，避免误伤标题中间的数字
     # （例如 "Ni Hao 1983" 在 season=1 时不应被改写为 "Ni Hao983"）
     title = title.rstrip()
+    padded_season = str(season_number).zfill(2)
     suffixes = [
         ' Season ' + season_number,
         ' season ' + season_number,
         ' Season' + season_number,
         ' season' + season_number,
         ' ' + season_number,
+        ' S' + padded_season,
+        ' s' + padded_season,
+        ' S' + season_number,
+        ' s' + season_number,
         ' ' + int_to_roman(int(season_number)),
         ' ' + int_to_special_roman(int(season_number)),
     ]

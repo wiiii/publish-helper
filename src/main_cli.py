@@ -273,6 +273,80 @@ def print_warning(message):
     print(f"{Colors.YELLOW}⚠ {message}{Colors.END}")
 
 
+def generate_auto_feed_output(
+    main_title,
+    second_title,
+    description,
+    media_info,
+    file_name,
+    team,
+    source,
+    category,
+):
+    """Generate, copy, and save the Auto-Feed link before slow torrent work."""
+    print("\n正在生成 Auto-Feed 链接...")
+    torrent_url = ""  # Can be filled if torrent is uploaded somewhere
+
+    get_auto_feed_link_success, response = get_auto_feed_link(
+        main_title, second_title,
+        description, media_info, file_name, team, source, category, torrent_url
+    )
+
+    if not get_auto_feed_link_success:
+        print_warning(f"Auto-Feed 链接生成失败: {response}")
+        return False
+
+    auto_feed_link = response
+    print_success("Auto-Feed 链接已生成")
+
+    clipboard_success = False
+    try:
+        import pyperclip
+        pyperclip.copy(auto_feed_link)
+        clipboard_success = True
+        print_success("链接已自动复制到剪贴板")
+    except Exception:
+        try:
+            if sys.platform == 'win32':
+                import subprocess
+                process = subprocess.Popen(
+                    ['clip'], stdin=subprocess.PIPE, shell=True)
+                process.communicate(auto_feed_link.encode('utf-16le'))
+                clipboard_success = True
+                print_success("链接已自动复制到剪贴板")
+            elif sys.platform == 'darwin':
+                import subprocess
+                process = subprocess.Popen(['pbcopy'], stdin=subprocess.PIPE)
+                process.communicate(auto_feed_link.encode('utf-8'))
+                clipboard_success = True
+                print_success("链接已自动复制到剪贴板")
+        except Exception:
+            pass
+
+    try:
+        temp_dir = os.path.join(os.path.dirname(
+            os.path.dirname(os.path.abspath(__file__))), 'temp')
+        os.makedirs(temp_dir, exist_ok=True)
+        link_file = os.path.join(temp_dir, 'auto_feed.txt')
+        compatibility_link_file = os.path.join(temp_dir, 'auto_feed_link.txt')
+        for target_file in [link_file, compatibility_link_file]:
+            with open(target_file, 'w', encoding='utf-8') as f:
+                f.write(auto_feed_link)
+        print_success(f"链接已保存到文件: {link_file}")
+    except Exception as e:
+        print_warning(f"保存链接文件失败: {e}")
+
+    if not clipboard_success:
+        print(f"\n{Colors.BOLD}Auto-Feed 链接:{Colors.END}")
+        print(f"{Colors.CYAN}{auto_feed_link}{Colors.END}")
+        print(
+            f"\n{Colors.YELLOW}提示: 链接已保存到 temp/auto_feed.txt 文件{Colors.END}\n")
+    else:
+        print(f"\n{Colors.YELLOW}提示: 直接 Ctrl+V 粘贴到浏览器即可{Colors.END}\n")
+
+    return True
+
+
 def prompt(message, default=None):
     """Prompt user for input."""
     if default:
@@ -341,6 +415,7 @@ def prompt_media_type():
     print("  1. 电影 / Movie")
     print("  2. 电视剧 / TV Series")
     print("  3. 短剧 / Playlet")
+    print("  4. 只制作种子 / Torrent Only")
     print("  0/q. 退出 / Quit")
 
     while True:
@@ -349,11 +424,16 @@ def prompt_media_type():
         if choice is None:
             continue
         print(choice)  # Echo the character
-        if choice in ['1', '2', '3']:
-            return {'1': 'movie', '2': 'tv', '3': 'playlet'}[choice]
+        if choice in ['1', '2', '3', '4']:
+            return {
+                '1': 'movie',
+                '2': 'tv',
+                '3': 'playlet',
+                '4': 'torrent',
+            }[choice]
         if choice in ['0', 'q', 'Q']:
             return None
-        print_error("请输入 0, 1, 2, 或 3")
+        print_error("请输入 0, 1, 2, 3, 或 4")
 
 
 def select_from_combo_box(label, combo_data_name):
@@ -410,16 +490,29 @@ def select_from_combo_box(label, combo_data_name):
             return choice if choice else valid_options[0]
 
 
-def process_movie(resource_url, video_path):
+def process_torrent_only(video_path):
+    """Only create a torrent for an already-prepared file or folder."""
+    torrent_storage = get_settings('torrent_storage_path')
+    print("正在制作种子...")
+    success, torrent_result = make_torrent(video_path, torrent_storage)
+    if success:
+        print_success(f"种子制作成功: {torrent_result}")
+        return True
+
+    print_error(f"种子制作失败: {torrent_result}")
+    return False
+
+
+def process_movie(resource_url, video_path, source=None, team=None):
     """Process a movie with the one-key workflow."""
     total_steps = 6
 
     # Collect all user choices FIRST before any API calls
     print(f"\n{Colors.BOLD}请完成以下选择 / Please make your selections:{Colors.END}\n")
 
-    # Get Source and Team selections upfront
-    source = select_from_combo_box("来源 Source", "source")
-    team = select_from_combo_box("制作组 Team", "team")
+    # Get Source and Team selections upfront unless automation supplied them.
+    source = source or select_from_combo_box("来源 Source", "source")
+    team = team or select_from_combo_box("制作组 Team", "team")
 
     print(f"\n{Colors.GREEN}✓ 所有选择已完成，开始自动处理...{Colors.END}\n")
 
@@ -741,6 +834,15 @@ def process_movie(resource_url, video_path):
     else:
         print_error(f"截图失败: {screenshots}")
 
+    category = '电影'
+    second_title = (
+        f"{original_title} / {other_titles_str} | 类型：{categories} | 演员：{actors_str}"
+    )
+    generate_auto_feed_output(
+        main_title, second_title,
+        description, media_info, file_name, team, source, category
+    )
+
     # Torrent
     torrent_storage = get_settings('torrent_storage_path')
     print("正在制作种子...")
@@ -752,90 +854,32 @@ def process_movie(resource_url, video_path):
     else:
         print_error(f"种子制作失败: {torrent_result}")
 
-    # Generate auto-feed link
-    print("\n正在生成 Auto-Feed 链接...")
-    category = '电影'
-    torrent_url = ""  # Can be filled if torrent is uploaded somewhere
-
-    get_auto_feed_link_success, response = get_auto_feed_link(
-        main_title, f"{original_title} / {other_titles_str} | 类型：{categories} | 演员：{actors_str}",
-        description, media_info, file_name, team, source, category, torrent_url
-    )
-
-    if get_auto_feed_link_success:
-        auto_feed_link = response
-        print_success("Auto-Feed 链接已生成")
-
-        # Try to copy to clipboard
-        clipboard_success = False
-        try:
-            import pyperclip
-            pyperclip.copy(auto_feed_link)
-            clipboard_success = True
-            print_success("链接已自动复制到剪贴板")
-        except Exception:
-            # pyperclip not available or no clipboard mechanism (headless Linux)
-            # Try platform-specific methods
-            try:
-                if sys.platform == 'win32':
-                    # Windows: use built-in clip command
-                    import subprocess
-                    process = subprocess.Popen(
-                        ['clip'], stdin=subprocess.PIPE, shell=True)
-                    process.communicate(auto_feed_link.encode('utf-16le'))
-                    clipboard_success = True
-                    print_success("链接已自动复制到剪贴板")
-                elif sys.platform == 'darwin':
-                    # macOS: use pbcopy
-                    import subprocess
-                    process = subprocess.Popen(
-                        ['pbcopy'], stdin=subprocess.PIPE)
-                    process.communicate(auto_feed_link.encode('utf-8'))
-                    clipboard_success = True
-                    print_success("链接已自动复制到剪贴板")
-            except Exception:
-                pass
-
-        # Save to file as backup in temp folder (avoid git tracking)
-        try:
-            # Get project root temp folder
-            temp_dir = os.path.join(os.path.dirname(
-                os.path.dirname(os.path.abspath(__file__))), 'temp')
-            os.makedirs(temp_dir, exist_ok=True)
-            link_file = os.path.join(temp_dir, 'auto_feed_link.txt')
-            with open(link_file, 'w', encoding='utf-8') as f:
-                f.write(auto_feed_link)
-            print_success(f"✓ 链接已保存到文件: {link_file}")
-        except Exception as e:
-            print_warning(f"保存链接文件失败: {e}")
-
-        if not clipboard_success:
-            print(f"\n{Colors.BOLD}Auto-Feed 链接:{Colors.END}")
-            print(f"{Colors.CYAN}{auto_feed_link}{Colors.END}")
-            print(
-                f"\n{Colors.YELLOW}提示: 链接已保存到 temp/auto_feed_link.txt 文件{Colors.END}\n")
-        else:
-            print(f"\n{Colors.YELLOW}提示: 直接 Ctrl+V 粘贴到浏览器即可{Colors.END}\n")
-    else:
-        print_warning(f"Auto-Feed 链接生成失败: {response}")
-
     print(f"\n{Colors.GREEN}{'='*50}")
     print(f"  ✓ 处理完成! / Processing Complete!")
     print(f"{'='*50}{Colors.END}\n")
 
-    return True
+    return {
+        'success': True,
+        'content_type': 'movie',
+        'resource_url': resource_url,
+        'video_path': video_path,
+        'video_file': video_file,
+        'torrent_path': torrent_path,
+        'auto_feed_path': os.path.join('temp', 'auto_feed.txt'),
+        'file_name': file_name,
+    }
 
 
-def process_tv(resource_url, video_path, season, episodes_start):
+def process_tv(resource_url, video_path, season, episodes_start, source=None, team=None):
     """Process a TV series with the one-key workflow."""
     total_steps = 6
 
     # Collect all user choices FIRST before any API calls
     print(f"\n{Colors.BOLD}请完成以下选择 / Please make your selections:{Colors.END}\n")
 
-    # Get Source and Team selections upfront
-    source = select_from_combo_box("来源 Source", "source")
-    team = select_from_combo_box("制作组 Team", "team")
+    # Get Source and Team selections upfront unless automation supplied them.
+    source = source or select_from_combo_box("来源 Source", "source")
+    team = team or select_from_combo_box("制作组 Team", "team")
 
     print(f"\n{Colors.GREEN}✓ 所有选择已完成，开始自动处理...{Colors.END}\n")
 
@@ -1226,6 +1270,15 @@ def process_tv(resource_url, video_path, season, episodes_start):
     else:
         print_error(f"截图失败: {screenshots}")
 
+    category = '剧集'
+    second_title = (
+        f"{original_title} / {other_titles_str} | 类型：{categories} | 演员：{actors_str}"
+    )
+    generate_auto_feed_output(
+        main_title, second_title,
+        description, media_info, file_name, team, source, category
+    )
+
     # Torrent
     torrent_storage = get_settings('torrent_storage_path')
     print("正在制作种子...")
@@ -1237,74 +1290,22 @@ def process_tv(resource_url, video_path, season, episodes_start):
     else:
         print_error(f"种子制作失败: {torrent_result}")
 
-    # Generate auto-feed link
-    print("\n正在生成 Auto-Feed 链接...")
-    category = '剧集'
-    torrent_url = ""  # Can be filled if torrent is uploaded somewhere
-
-    get_auto_feed_link_success, response = get_auto_feed_link(
-        main_title, f"{original_title} / {other_titles_str} | 类型：{categories} | 演员：{actors_str}",
-        description, media_info, file_name, team, source, category, torrent_url
-    )
-
-    if get_auto_feed_link_success:
-        auto_feed_link = response
-        print_success("Auto-Feed 链接已生成")
-
-        # Try to copy to clipboard
-        clipboard_success = False
-        try:
-            import pyperclip
-            pyperclip.copy(auto_feed_link)
-            clipboard_success = True
-            print_success("链接已自动复制到剪贴板")
-        except Exception:
-            # pyperclip not available or no clipboard mechanism (headless Linux)
-            try:
-                if sys.platform == 'win32':
-                    import subprocess
-                    process = subprocess.Popen(
-                        ['clip'], stdin=subprocess.PIPE, shell=True)
-                    process.communicate(auto_feed_link.encode('utf-16le'))
-                    clipboard_success = True
-                    print_success("链接已自动复制到剪贴板")
-                elif sys.platform == 'darwin':
-                    import subprocess
-                    process = subprocess.Popen(
-                        ['pbcopy'], stdin=subprocess.PIPE)
-                    process.communicate(auto_feed_link.encode('utf-8'))
-                    clipboard_success = True
-                    print_success("链接已自动复制到剪贴板")
-            except Exception:
-                pass
-
-        # Save to file as backup
-        try:
-            temp_dir = os.path.join(os.path.dirname(
-                os.path.dirname(os.path.abspath(__file__))), 'temp')
-            os.makedirs(temp_dir, exist_ok=True)
-            link_file = os.path.join(temp_dir, 'auto_feed_link.txt')
-            with open(link_file, 'w', encoding='utf-8') as f:
-                f.write(auto_feed_link)
-            print_success(f"链接已保存到文件: {link_file}")
-        except Exception as e:
-            print_warning(f"保存链接文件失败: {e}")
-
-        if not clipboard_success:
-            print(f"\n{Colors.BOLD}Auto-Feed 链接:{Colors.END}")
-            print(f"{Colors.CYAN}{auto_feed_link}{Colors.END}")
-            print(
-                f"\n{Colors.YELLOW}提示: 链接已保存到 temp/auto_feed_link.txt 文件{Colors.END}\n")
-        else:
-            print(f"\n{Colors.YELLOW}提示: 直接 Ctrl+V 粘贴到浏览器即可{Colors.END}\n")
-    else:
-        print_warning(f"Auto-Feed 链接生成失败: {response}")
-
     print(f"\n{Colors.GREEN}{'='*50}")
     print(f"  ✓ 处理完成! / Processing Complete!")
     print(f"{'='*50}{Colors.END}\n")
 
-    return True
+    return {
+        'success': True,
+        'content_type': 'tv',
+        'resource_url': resource_url,
+        'video_path': video_path,
+        'video_file': video_file,
+        'torrent_path': torrent_path,
+        'auto_feed_path': os.path.join('temp', 'auto_feed.txt'),
+        'file_name': file_name,
+        'season': season,
+        'episodes_start': episodes_start,
+    }
 
 
 def process_playlet(original_title, year, area, categories, language, playlet_source, video_path, season, episodes_start):
@@ -1639,6 +1640,12 @@ def process_playlet(original_title, year, area, categories, language, playlet_so
     else:
         print_error(f"截图失败: {screenshots}")
 
+    category = '短剧'
+    generate_auto_feed_output(
+        main_title, second_title,
+        description, media_info, file_name, team, source, category
+    )
+
     # Torrent
     torrent_storage = get_settings('torrent_storage_path')
     print("正在制作种子...")
@@ -1649,69 +1656,6 @@ def process_playlet(original_title, year, area, categories, language, playlet_so
         torrent_path = torrent_result
     else:
         print_error(f"种子制作失败: {torrent_result}")
-
-    # Generate auto-feed link
-    print("\n正在生成 Auto-Feed 链接...")
-    category = '短剧'
-    torrent_url = ""  # Can be filled if torrent is uploaded somewhere
-
-    get_auto_feed_link_success, response = get_auto_feed_link(
-        main_title, second_title,
-        description, media_info, file_name, team, source, category, torrent_url
-    )
-
-    if get_auto_feed_link_success:
-        auto_feed_link = response
-        print_success("Auto-Feed 链接已生成")
-
-        # Try to copy to clipboard
-        clipboard_success = False
-        try:
-            import pyperclip
-            pyperclip.copy(auto_feed_link)
-            clipboard_success = True
-            print_success("链接已自动复制到剪贴板")
-        except Exception:
-            # pyperclip not available or no clipboard mechanism (headless Linux)
-            try:
-                if sys.platform == 'win32':
-                    import subprocess
-                    process = subprocess.Popen(
-                        ['clip'], stdin=subprocess.PIPE, shell=True)
-                    process.communicate(auto_feed_link.encode('utf-16le'))
-                    clipboard_success = True
-                    print_success("链接已自动复制到剪贴板")
-                elif sys.platform == 'darwin':
-                    import subprocess
-                    process = subprocess.Popen(
-                        ['pbcopy'], stdin=subprocess.PIPE)
-                    process.communicate(auto_feed_link.encode('utf-8'))
-                    clipboard_success = True
-                    print_success("链接已自动复制到剪贴板")
-            except Exception:
-                pass
-
-        # Save to file as backup
-        try:
-            temp_dir = os.path.join(os.path.dirname(
-                os.path.dirname(os.path.abspath(__file__))), 'temp')
-            os.makedirs(temp_dir, exist_ok=True)
-            link_file = os.path.join(temp_dir, 'auto_feed_link.txt')
-            with open(link_file, 'w', encoding='utf-8') as f:
-                f.write(auto_feed_link)
-            print_success(f"链接已保存到文件: {link_file}")
-        except Exception as e:
-            print_warning(f"保存链接文件失败: {e}")
-
-        if not clipboard_success:
-            print(f"\n{Colors.BOLD}Auto-Feed 链接:{Colors.END}")
-            print(f"{Colors.CYAN}{auto_feed_link}{Colors.END}")
-            print(
-                f"\n{Colors.YELLOW}提示: 链接已保存到 temp/auto_feed_link.txt 文件{Colors.END}\n")
-        else:
-            print(f"\n{Colors.YELLOW}提示: 直接 Ctrl+V 粘贴到浏览器即可{Colors.END}\n")
-    else:
-        print_warning(f"Auto-Feed 链接生成失败: {response}")
 
     print(f"\n{Colors.GREEN}{'='*50}")
     print(f"  ✓ 处理完成! / Processing Complete!")
@@ -1810,6 +1754,8 @@ def main():
             print_error("开始集数必须是数字")
             return 1
         print()
+    elif content_type == 'torrent':
+        print(f"{Colors.BOLD}只制作种子 / Torrent Only:{Colors.END}\n")
     else:
         # Movie and TV use PT-Gen API
         resource_url = prompt("请输入资源链接 (豆瓣/IMDB URL)")
@@ -1950,6 +1896,8 @@ def main():
     elif content_type == 'playlet':
         success = process_playlet(original_title, year, area, categories, language,
                                   playlet_source, video_path, season, episodes_start)
+    elif content_type == 'torrent':
+        success = process_torrent_only(video_path)
     else:
         print_error("未知的内容类型")
         success = False
