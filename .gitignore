@@ -57,6 +57,7 @@ static/settings.json
 # PyInstaller
 *.manifest
 *.spec
+!publish-helper.spec
 
 # Test coverage
 htmlcov/
