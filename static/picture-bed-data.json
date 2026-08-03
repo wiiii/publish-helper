@@ -2,7 +2,8 @@
     "lsky-pro": [
         "https://picture.agsvpt.cn/api/v1/upload",
         "https://picture.agsv.top/api/v1/upload",
-        "https://img.ptvicomo.net/api/v1/upload"
+        "https://img.ptvicomo.net/api/v1/upload",
+		"https://longpt.org/pt-api/api/v1/images/upload"
     ],
     "bohe": [
         "https://img.agsv.top/api/upload"

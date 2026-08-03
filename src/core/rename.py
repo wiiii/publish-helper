@@ -9,6 +9,139 @@ from pymediainfo import MediaInfo
 from src.core.tool import get_settings, get_abbreviation, chinese_to_int
 
 
+def _first_media_value(value):
+    if isinstance(value, list):
+        return value[0] if value else ''
+    return value or ''
+
+
+def _get_audio_codec(track):
+    return (
+        _first_media_value(getattr(track, 'commercial_name', '')) or
+        _first_media_value(getattr(track, 'other_format', '')) or
+        _first_media_value(getattr(track, 'format', ''))
+    )
+
+
+def _get_audio_channels(track):
+    return (
+        _first_media_value(getattr(track, 'channel_layout', '')) or
+        _first_media_value(getattr(track, 'other_channel_s', '')) or
+        str(_first_media_value(getattr(track, 'channel_s', '')) or '')
+    )
+
+
+def _audio_codec_score(codec):
+    codec = str(codec or '').lower()
+    if 'atmos' in codec and 'truehd' in codec:
+        return 1000
+    if 'dts:x' in codec or 'dts-x' in codec:
+        return 980
+    if 'truehd' in codec:
+        return 950
+    if (
+        'dts-hd master' in codec or
+        'dts hd master' in codec or
+        'dts-hd ma' in codec
+    ):
+        return 900
+    if 'atmos' in codec and (
+        'digital plus' in codec or 'e-ac-3' in codec or 'eac3' in codec
+    ):
+        return 850
+    if 'dts-hd high resolution' in codec or 'dts hd high resolution' in codec:
+        return 830
+    if 'digital plus' in codec or 'e-ac-3' in codec or 'eac3' in codec:
+        return 750
+    if 'dts' in codec:
+        return 700
+    if 'dolby digital' in codec or 'ac-3' in codec or 'ac3' in codec:
+        return 650
+    if 'flac' in codec:
+        return 600
+    if 'pcm' in codec:
+        return 550
+    if 'aac' in codec:
+        return 300
+    if 'mp3' in codec or 'mpeg audio' in codec:
+        return 100
+    return 0
+
+
+def _audio_channel_score(channels):
+    channels = str(channels or '')
+    channel_match = re.search(r'(\d+(?:\.\d+)?)', channels)
+    if channel_match:
+        return float(channel_match.group(1))
+
+    layout_parts = channels.split()
+    if not layout_parts:
+        return 0
+
+    lfe_count = sum(1 for part in layout_parts if part.upper() == 'LFE')
+    return (len(layout_parts) - lfe_count) + (0.1 * lfe_count)
+
+
+def _audio_bitrate_score(track):
+    bitrate = _first_media_value(
+        getattr(track, 'bit_rate', '')
+    ) or _first_media_value(getattr(track, 'other_bit_rate', ''))
+    if isinstance(bitrate, int):
+        return bitrate
+    if isinstance(bitrate, float):
+        return int(bitrate)
+    numbers = re.findall(r'\d+', str(bitrate).replace(' ', ''))
+    return int(''.join(numbers)) if numbers else 0
+
+
+def _select_best_audio_track(audio_tracks):
+    if not audio_tracks:
+        return '', ''
+
+    best_track = max(
+        audio_tracks,
+        key=lambda item: (
+            _audio_codec_score(item['codec']),
+            _audio_channel_score(item['channels']),
+            item['bitrate'],
+            -item['index'],
+        )
+    )
+    return best_track['codec'], best_track['channels']
+
+
+def _looks_like_english_title(title):
+    title = str(title or '').strip()
+    if not re.search(r'[A-Za-z]', title):
+        return False
+    # Avoid using Chinese/Japanese/Korean aliases as the English release title.
+    return not re.search(r'[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]', title)
+
+
+def _normalize_english_release_title(title, season=None):
+    title = re.sub(r'\s+', ' ', str(title or '').strip())
+    if season:
+        season_text = str(season)
+        title = re.sub(
+            rf'\bSeason\s*0*{re.escape(season_text)}\b',
+            '',
+            title,
+            flags=re.IGNORECASE,
+        )
+    return title.strip()
+
+
+def _select_english_release_title(foreign_title, aka_titles, season=None):
+    if _looks_like_english_title(foreign_title):
+        return _normalize_english_release_title(foreign_title, season)
+
+    for title in aka_titles:
+        if _looks_like_english_title(title):
+            return _normalize_english_release_title(title, season)
+
+    return str(foreign_title or '').strip()
+
+
 # 从PT-Gen响应中读取关键数据
 def get_pt_gen_info(description, raw_data=None):
     """从PT-Gen响应中读取关键数据。
@@ -40,6 +173,7 @@ def get_pt_gen_info(description, raw_data=None):
     raw_actors = []
     raw_episodes = None
     raw_season = None
+    raw_aka_titles = []
 
     if raw_data and isinstance(raw_data, dict):
         # 中文标题
@@ -57,10 +191,7 @@ def get_pt_gen_info(description, raw_data=None):
         # 其他名称（aka 列表）
         aka_list = raw_data.get('aka', [])
         if isinstance(aka_list, list):
-            # 过滤掉已作为主标题的名称
-            raw_other_titles = [name.strip() for name in aka_list
-                                if name.strip() and name.strip() != raw_original_title and name.strip() != raw_english_title]
-        print(f'  [raw_data] aka: {raw_other_titles}')
+            raw_aka_titles = [str(name).strip() for name in aka_list if str(name).strip()]
 
         # 类别（genre 列表 → 用 " / " 拼接）
         genre_list = raw_data.get('genre', [])
@@ -105,6 +236,18 @@ def get_pt_gen_info(description, raw_data=None):
                 elif season_in_title.group(3):
                     raw_season = int(season_in_title.group(3))
         print(f'  [raw_data] season: {raw_season}')
+
+        selected_english_title = _select_english_release_title(
+            raw_english_title, raw_aka_titles, raw_season
+        )
+        if selected_english_title != raw_english_title:
+            print(f'  [raw_data] selected English title: {selected_english_title}')
+        raw_english_title = selected_english_title
+
+        # 过滤掉已作为主标题的名称
+        raw_other_titles = [name.strip() for name in raw_aka_titles
+                            if name.strip() and name.strip() != raw_original_title and name.strip() != raw_english_title]
+        print(f'  [raw_data] aka: {raw_other_titles}')
 
     # ========== 正则解析 description（回退）==========
 
@@ -274,6 +417,7 @@ def get_video_info(file_path):
         width = ''
         height = ''
         tags = []
+        audio_tracks = []
         for track in media_info.tracks:
             # 添加General信息
             if track.track_type == 'General':
@@ -302,11 +446,14 @@ def get_video_info(file_path):
 
             # 添加Audio信息
             elif track.track_type == 'Audio':
-                if audio_count == 0:
-                    if track.commercial_name:
-                        audio_codec = track.commercial_name
-                    if track.channel_layout:
-                        channels = track.channel_layout
+                track_audio_codec = _get_audio_codec(track)
+                track_channels = _get_audio_channels(track)
+                audio_tracks.append({
+                    'index': audio_count,
+                    'codec': track_audio_codec,
+                    'channels': track_channels,
+                    'bitrate': _audio_bitrate_score(track),
+                })
                 if track.other_language == 'Chinese' and '国语' not in tags:
                     tags.append('国语')
                 if track.other_language == 'English' and '英语' not in tags:
@@ -335,6 +482,7 @@ def get_video_info(file_path):
             audio_num = ''
         else:
             audio_num = str(audio_count) + get_abbreviation('Audio')
+        audio_codec, channels = _select_best_audio_track(audio_tracks)
         return True, [video_format, get_abbreviation(video_codec), get_abbreviation(bit_depth),
                       get_abbreviation(hdr_format), get_abbreviation(frame_rate), get_abbreviation(audio_codec),
                       get_abbreviation(channels), audio_num, tags]
@@ -531,7 +679,7 @@ def move_file_to_folder(file_path, folder_name):
     # 检查文件是否已在目标文件夹中
     if os.path.basename(file_dir) == folder_name:
         print(f'文件"{file_path}"已在"{folder_name}"中，无需移动')
-        return False, f'文件"{file_path}"已在"{folder_name}"中，无需移动'
+        return True, file_path
 
     # 目标文件夹的完整路径
     target_folder = file_dir + '/' + folder_name

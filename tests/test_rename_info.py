@@ -2,6 +2,7 @@
 
 import pytest
 from src.core.rename import get_pt_gen_info
+from src.core.tool import delete_season_number
 
 
 # Sample formatted description text (◎ prefix format)
@@ -162,3 +163,23 @@ class TestGetPtGenInfoTVSeason:
         raw_data = {"episodes": 22}
         _, _, _, _, _, _, episodes, _ = get_pt_gen_info("minimal description", raw_data=raw_data)
         assert episodes == 22
+
+    def test_non_english_foreign_title_prefers_english_aka(self):
+        raw_data = {
+            "chinese_title": "赌命为王  第二季",
+            "foreign_title": "카지노2",
+            "aka": ["Big Bet Season 2", "地下菁英2"],
+            "year": 2023,
+        }
+        _, english, *_ = get_pt_gen_info("minimal description", raw_data=raw_data)
+        assert english == "Big Bet"
+
+
+class TestDeleteSeasonNumber:
+    """Test season suffix cleanup for release titles."""
+
+    def test_removes_bare_numeric_season_suffix(self):
+        assert delete_season_number("Big Bet 2", "2") == "Big Bet"
+
+    def test_removes_explicit_season_suffix(self):
+        assert delete_season_number("Big Bet Season 2", "2") == "Big Bet"
