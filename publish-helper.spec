@@ -20,8 +20,11 @@ _app_icon = 'static/ph-bjd.ico' if _system in ('Windows', 'Darwin') else None
 # Linux / macOS 使用无空格名称，便于在 shell / CI 中引用
 _app_name = 'Publish Helper' if _system == 'Windows' else 'publish-helper'
 
+# Linux 打包为无桌面依赖的 CLI 版（main_cli.py，console=True），
+# Windows / macOS 仍为桌面 GUI 版（main_gui.py，console=False）
+_entry = 'src/main_cli.py' if _system == 'Linux' else 'src/main_gui.py'
 a = Analysis(
-    ['src/main_gui.py'],
+    [_entry],
     pathex=[],
     binaries=binaries,
     datas=[
@@ -106,7 +109,7 @@ exe = EXE(
     bootloader_ignore_signals=False,
     strip=False,
     upx=True,
-    console=False,
+    console=(_system == 'Linux'),
     disable_windowed_traceback=False,
     argv_emulation=False,
     target_arch=None,
