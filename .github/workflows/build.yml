@@ -1,0 +1,97 @@
+name: Build Release
+
+# 触发方式：
+#   1. 手动在 Actions 页面点击 "Run workflow"
+#   2. 推送形如 v1.2.3 的 tag 时，自动构建并发布 GitHub Release
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build:
+    name: Build (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            asset: dist/publish-helper-windows.exe
+            rename_cmd: 'Copy-Item "dist/Publish Helper.exe" "dist/publish-helper-windows.exe"'
+          - os: ubuntu-latest
+            asset: dist/publish-helper-linux
+            rename_cmd: 'cp "dist/publish-helper" "dist/publish-helper-linux"'
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      # Linux 需要系统级 MediaInfo 库（PyQt6 运行也需要若干图形/Qt 依赖）
+      - name: Install system dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libmediainfo0v5 libzen0v5 \
+            libgl1 libegl1 libxkbcommon0 libdbus-1-3 \
+            libglib2.0-0 libx11-6 libxext6 fontconfig
+
+      # Windows 需要 MediaInfo.dll 供 pymediainfo 在打包时加载；
+      # 装好后把 MediaInfo.dll 复制到工作区根目录，PyInstaller 会自动收集
+      - name: Install MediaInfo (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          choco install mediainfo -y
+          $dll = Get-ChildItem -Path "C:\ProgramData\chocolatey\lib\mediainfo" -Recurse -Filter "MediaInfo.dll" | Select-Object -First 1
+          if (-not $dll) {
+            $dll = Get-ChildItem -Path "C:\Program Files\MediaInfo" -Recurse -Filter "MediaInfo.dll" | Select-Object -First 1
+          }
+          if ($dll) {
+            Copy-Item $dll.FullName -Destination "."
+            Write-Host "Copied MediaInfo.dll from $($dll.FullName)"
+          } else {
+            Write-Error "MediaInfo.dll not found after choco install"
+            exit 1
+          }
+
+      - name: Install Python dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+
+      - name: Build with PyInstaller
+        run: pyinstaller --clean publish-helper.spec
+
+      # 把带空格 / 平台默认名重命名为无空格的稳定文件名，方便上传与发布
+      - name: Rename artifact
+        shell: pwsh
+        if: runner.os == 'Windows'
+        run: ${{ matrix.rename_cmd }}
+      - name: Rename artifact
+        if: runner.os == 'Linux'
+        run: ${{ matrix.rename_cmd }}
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.os }}-build
+          path: ${{ matrix.asset }}
+          if-no-files-found: error
+
+      # 仅在打 tag 时创建 Release 并附上产物
+      - name: Create GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ matrix.asset }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

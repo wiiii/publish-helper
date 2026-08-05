@@ -1,14 +1,29 @@
 # -*- mode: python ; coding: utf-8 -*-
+import os
+import platform
 
 block_cipher = None
+
+_system = platform.system()  # 'Windows' / 'Linux' / 'Darwin'
+
+# 平台相关二进制文件：
+# - Mandarin.dat 全平台都需要
+# - libmediainfo.0.dylib 仅 macOS 存在，Windows/Linux 使用各自系统的 MediaInfo 库
+binaries = [('Mandarin.dat', '.')]
+if _system == 'Darwin':
+    binaries.append(('libmediainfo.0.dylib', '.'))
+
+# 图标：仅 Windows / macOS 需要；Linux 下 .ico 不被支持，留空
+_app_icon = 'static/ph-bjd.ico' if _system in ('Windows', 'Darwin') else None
+
+# 跨平台可执行文件名：Windows 保留带空格的 "Publish Helper"，
+# Linux / macOS 使用无空格名称，便于在 shell / CI 中引用
+_app_name = 'Publish Helper' if _system == 'Windows' else 'publish-helper'
 
 a = Analysis(
     ['src/main_gui.py'],
     pathex=[],
-    binaries=[
-        ('libmediainfo.0.dylib', '.'),
-        ('Mandarin.dat', '.'),
-    ],
+    binaries=binaries,
     datas=[
         ('static', 'static'),
         ('docs/requirements.txt', 'docs'),
@@ -86,7 +101,7 @@ exe = EXE(
     a.zipfiles,
     a.datas,
     [],
-    name='Publish Helper',
+    name=_app_name,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
@@ -97,5 +112,5 @@ exe = EXE(
     target_arch=None,
     codesign_identity=None,
     entitlements_file=None,
-    icon='static/ph-bjd.ico',
+    icon=_app_icon,
 )

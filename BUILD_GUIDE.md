@@ -132,3 +132,25 @@ name='Publish Helper',
 2. 建议在干净虚拟环境中打包，减少无关依赖被扫描。
 3. 打包前确认源码可以直接运行。
 4. `build` 和 `dist` 是构建产物，不需要提交到仓库。
+
+## GitHub Actions 自动构建
+
+仓库已内置 `.github/workflows/build.yml`，在 GitHub 上自动构建跨平台可执行文件，**无需本地操作**：
+
+- **Windows**：产出 `publish-helper-windows.exe`（基于 `src/main_gui.py` 的 GUI 单文件）
+- **Linux（Ubuntu）**：产出 `publish-helper-linux`（GUI 可执行，运行时需桌面环境 / xvfb）
+
+### 触发方式
+
+1. **手动**：在仓库 `Actions → Build Release → Run workflow` 点击运行，构建完成后在 `Artifacts` 中下载。
+2. **自动发版**：推送形如 `v1.2.3` 的 tag（`git tag v1.2.3 && git push origin v1.2.3`），工作流会自动构建并在 `Releases` 页面创建带产物的 Release。
+
+### 构建配置说明
+
+- 工作流复用本仓库的 `publish-helper.spec`，该 spec 已做**跨平台兼容**：
+  - `libmediainfo.0.dylib` 仅 macOS 生效，Windows/Linux 使用各自系统的 MediaInfo 库；
+  - 图标仅 Windows/macOS 设置，Linux 不传；
+  - 可执行文件名：Windows 为 `Publish Helper.exe`，Linux 为 `publish-helper`。
+- Windows runner 通过 Chocolatey 安装 `mediainfo` 并把 `MediaInfo.dll` 复制到工作区供 PyInstaller 收集；
+- Linux runner 通过 `apt` 安装 `libmediainfo0v5` 及 PyQt6 运行所需的系统库。
+- Python 版本固定为 3.11（与 `Dockerfile` 一致），避免 PyQt6 wheel 兼容问题。
