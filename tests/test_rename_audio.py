@@ -5,6 +5,28 @@ from types import SimpleNamespace
 from src.core import rename
 
 
+def test_audio_selection_prioritizes_codec_level_before_channels_and_bitrate():
+    audio_tracks = [
+        {
+            "index": 0,
+            "codec": "Dolby Digital Plus",
+            "channels": "7.1",
+            "bitrate": 1536,
+        },
+        {
+            "index": 1,
+            "codec": "Dolby TrueHD",
+            "channels": "2.0",
+            "bitrate": 640,
+        },
+    ]
+
+    assert rename._select_best_audio_track(audio_tracks) == (
+        "Dolby TrueHD",
+        "2.0",
+    )
+
+
 def test_get_video_info_selects_higher_spec_audio_track(tmp_path, monkeypatch):
     video_file = tmp_path / "sample.mkv"
     video_file.write_bytes(b"")

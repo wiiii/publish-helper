@@ -356,6 +356,19 @@ def prompt(message, default=None):
     return input(f"{Colors.BOLD}{message}{Colors.END}: ").strip()
 
 
+def prompt_rename_english_title(english_title, ptgen_name=True):
+    """Allow CLI users to replace the title before the rename template runs."""
+    if get_settings('rename_file') != 'True':
+        return english_title
+    if get_settings('second_confirm_file_name') != 'True':
+        return english_title
+
+    default_source = "PT-Gen 获取" if ptgen_name else "自动生成"
+    message = f"请输入新的英文或拼音名称，直接回车使用{default_source}的名称"
+    selected_title = prompt(message, default=english_title)
+    return ' '.join(selected_title.replace('.', ' ').split())
+
+
 def prompt_path(message, default=None):
     """Prompt for file path with tab completion support using prompt_toolkit."""
     # Use custom PathCompleter that adds slash to directories
@@ -575,6 +588,8 @@ def process_movie(resource_url, video_path, source=None, team=None):
         english_title = chinese_name_to_pinyin(original_title)
         if english_title:
             print_success(f"拼音名称: {english_title}")
+
+    english_title = prompt_rename_english_title(english_title)
 
     # Step 3: Get video info
     print_step(3, total_steps, "获取视频信息...")
@@ -947,6 +962,8 @@ def process_tv(resource_url, video_path, season, episodes_start, source=None, te
         english_title = chinese_name_to_pinyin(original_title)
         if english_title:
             print_success(f"拼音名称: {english_title}")
+
+    english_title = prompt_rename_english_title(english_title)
 
     # Step 3: Get video info and count episodes
     print_step(3, total_steps, "获取视频信息...")
@@ -1338,6 +1355,9 @@ def process_playlet(original_title, year, area, categories, language, playlet_so
         english_title = chinese_name_to_pinyin(original_title)
         if english_title:
             print_success(f"拼音名称: {english_title}")
+
+    english_title = prompt_rename_english_title(
+        english_title, ptgen_name=False)
 
     print_success(f"标题: {original_title} ({year}) S{season:02d}")
 
