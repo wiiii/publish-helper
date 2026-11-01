@@ -20,9 +20,38 @@ import requests
 from src.core.release_metadata import (
     parse_overall_bitrate_mbps,
     parse_video_frame_rate,
+    platform_brand_violations,
     section_text,
     split_mediainfo_sections,
 )
+
+# 与 longpt-auto-publisher 同名开关：设为 0 可跳过品牌词校验（本地自测用）。
+BRAND_TAG_CHECK_ENV = 'LONGPT_BRAND_TAG_CHECK'
+
+
+def _env_bool(name, default=True):
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    return value.strip().lower() not in ('0', 'false', 'no', 'off')
+
+
+def enforce_platform_brand_tags(fields):
+    """校验副标题/名称里的平台高画质品牌词能否被 MediaInfo 支撑。
+
+    帧绮映画MAX / 臻彩视听 / 帧享 本身在宣称 HDR 体验，SDR 源写上会被站点
+    判为「描述与实际不符」。没有 MediaInfo 时视为无法判断，不拦。
+    """
+    if not _env_bool(BRAND_TAG_CHECK_ENV, True):
+        return []
+    media_info = get_mediainfo_text(fields)
+    if not media_info:
+        return []
+    violations = []
+    for key in ('small_descr', 'name'):
+        for problem in platform_brand_violations(fields.get(key), media_info):
+            violations.append(f'{key}: {problem}')
+    return violations
 
 
 TYPE_VALUES = {
@@ -229,6 +258,14 @@ def infer_tags(fields, extra_tags=None):
 
 
 def build_form(fields, tags=None, pos_state='sticky', sticky_days=7):
+    brand_violations = enforce_platform_brand_tags(fields)
+    if brand_violations:
+        raise ValueError(
+            '副标题/名称带平台高画质品牌词，但 MediaInfo 不支持'
+            '（SDR 源不能标帧绮映画MAX/臻彩视听/帧享）: '
+            + '; '.join(brand_violations)
+            + f'。确认无误可设置 {BRAND_TAG_CHECK_ENV}=0 跳过校验。'
+        )
     category = fields.get('type') or '剧集'
     category_value = first_match(category, TYPE_VALUES)
     if category_value == '0':

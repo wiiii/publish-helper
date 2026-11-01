@@ -1,17 +1,21 @@
 {
     "iQIYI": {
+        "code": "IQY",
+        "display_name": "爱奇艺",
         "templates": {
-            "file_name_movie": "{original_title}.{en_title}.{year}.{video_format}.{platform}.{source}.{hdr_format}.{video_codec}.{audio_codec}.{channels}-{team}",
-            "main_title_movie": "{en_title} {year} {video_format} {platform} {source} {hdr_format} {video_codec} {audio_codec} {channels}-{team}"
+            "file_name_movie": "{original_title}.{en_title}.{year}.{video_format}.{platform_code}.{source}.{hdr_format}.{video_codec}.{audio_codec}.{channels}-{team}",
+            "main_title_movie": "{en_title} {year} {video_format} {platform_code} {source} {hdr_format} {video_codec} {audio_codec} {channels}-{team}"
         }
     },
     "NF": {
         "templates": {
-            "second_title_tv": "{original_title} | {total_episodes} | {platform} | 类型：{categories}"
+            "second_title_tv": "{original_title} | {total_episodes} | {platform_name} | 类型：{categories}"
         }
     },
     "CustomTV": {
         "aliases": ["自定义平台"],
+        "code": "CTV",
+        "display_name": "自定义平台",
         "templates": {}
     }
 }

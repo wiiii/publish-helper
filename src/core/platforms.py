@@ -6,17 +6,59 @@ from pathlib import Path
 
 
 DEFAULT_PLATFORMS = {
-    'iQIYI': ['爱奇艺', 'IQY'],
-    'Tencent': ['腾讯', '腾讯视频', 'WeTV', 'TX'],
-    'YouKu': ['优酷', 'YK'],
-    'Bilibili': ['哔哩哔哩', 'B站', 'BILI'],
-    'MGTV': ['芒果', '芒果TV'],
-    'DSNP': ['DisneyPlus', 'Disney+', '迪士尼'],
-    'NF': ['Netflix', '奈飞', '网飞'],
-    'AMZN': ['Amazon', 'Prime Video'],
-    'HMAX': ['HBO Max', 'Max'],
-    'ATVP': ['AppleTV+', 'Apple TV+'],
+    'iQIYI': {
+        'aliases': ['爱奇艺', 'IQY'],
+        'code': 'IQY',
+        'display_name': '爱奇艺',
+    },
+    'Tencent': {
+        'aliases': ['腾讯', '腾讯视频', 'WeTV', 'TX'],
+        'code': 'TX',
+        'display_name': '腾讯视频',
+    },
+    'YouKu': {
+        'aliases': ['优酷', 'YK'],
+        'code': 'YK',
+        'display_name': '优酷',
+    },
+    'Bilibili': {
+        'aliases': ['哔哩哔哩', 'B站', 'BILI'],
+        'code': 'BILI',
+        'display_name': '哔哩哔哩',
+    },
+    'MGTV': {
+        'aliases': ['芒果', '芒果TV'],
+        'code': 'MGTV',
+        'display_name': '芒果TV',
+    },
+    'DSNP': {
+        'aliases': ['DisneyPlus', 'Disney+', '迪士尼'],
+        'code': 'DSNP',
+        'display_name': 'Disney+',
+    },
+    'NF': {
+        'aliases': ['Netflix', '奈飞', '网飞'],
+        'code': 'NF',
+        'display_name': 'Netflix',
+    },
+    'AMZN': {
+        'aliases': ['Amazon', 'Prime Video'],
+        'code': 'AMZN',
+        'display_name': 'Amazon Prime Video',
+    },
+    'HMAX': {
+        'aliases': ['HBO Max', 'Max'],
+        'code': 'HMAX',
+        'display_name': 'HBO Max',
+    },
+    'ATVP': {
+        'aliases': ['AppleTV+', 'Apple TV+'],
+        'code': 'ATVP',
+        'display_name': 'Apple TV+',
+    },
 }
+PROFILE_FIELDS = {'aliases', 'templates', 'code', 'display_name'}
+
 TEMPLATE_KEYS = {
     f'{kind}_{media_type}'
     for kind in ('file_name', 'main_title', 'second_title')
@@ -24,17 +66,34 @@ TEMPLATE_KEYS = {
 }
 TEMPLATE_FIELDS = {
     'en_title', 'original_title', 'season', 'episode', 'year', 'video_format',
-    'source', 'platform', 'video_codec', 'bit_depth', 'hdr_format', 'frame_rate',
+    'source', 'platform', 'platform_code', 'platform_name',
+    'video_codec', 'bit_depth', 'hdr_format', 'frame_rate',
     'audio_codec', 'channels', 'audio_num', 'team', 'other_titles',
     'season_number', 'total_episodes', 'playlet_source', 'categories', 'actors',
     '集数',
 }
 
 
+def blank_profile():
+    return {'aliases': [], 'templates': {}, 'code': '', 'display_name': ''}
+
+
+def _profile_from_defaults(spec):
+    """把 DEFAULT_PLATFORMS 的条目统一成完整档案。"""
+    if not isinstance(spec, dict):
+        return {**blank_profile(), 'aliases': list(spec)}
+    return {
+        'aliases': list(spec.get('aliases', [])),
+        'templates': {},
+        'code': str(spec.get('code', '')),
+        'display_name': str(spec.get('display_name', '')),
+    }
+
+
 def load_platforms():
     profiles = {
-        label: {'aliases': list(aliases), 'templates': {}}
-        for label, aliases in DEFAULT_PLATFORMS.items()
+        label: _profile_from_defaults(spec)
+        for label, spec in DEFAULT_PLATFORMS.items()
     }
     config_path = Path('static/platforms.json')
     if config_path.exists():
@@ -48,7 +107,7 @@ def load_platforms():
             if not label.strip() or not isinstance(profile, dict):
                 raise ValueError(f'无效的平台配置：{label}')
             profiles[label] = {
-                **profiles.get(label, {'aliases': [], 'templates': {}}),
+                **profiles.get(label, blank_profile()),
                 **profile,
             }
     _validate_platforms(profiles)
@@ -58,8 +117,10 @@ def load_platforms():
 def _validate_platforms(profiles):
     identifiers = {}
     for label, profile in profiles.items():
-        if set(profile) - {'aliases', 'templates'}:
-            raise ValueError(f'{label} 的配置仅支持 aliases 和 templates')
+        if set(profile) - PROFILE_FIELDS:
+            raise ValueError(
+                f'{label} 的配置仅支持 aliases、templates、code、display_name'
+            )
         aliases = profile.get('aliases', [])
         templates = profile.get('templates', {})
         if not isinstance(aliases, list) or not all(
@@ -68,6 +129,10 @@ def _validate_platforms(profiles):
             raise ValueError(f'{label} 的 aliases 必须是非空字符串列表')
         if not isinstance(templates, dict):
             raise ValueError(f'{label} 的 templates 必须是 JSON 对象')
+        for field in ('code', 'display_name'):
+            value = profile.get(field, '')
+            if not isinstance(value, str):
+                raise ValueError(f'{label} 的 {field} 必须是字符串')
         for key, template in templates.items():
             if (
                 key not in TEMPLATE_KEYS
@@ -91,14 +156,42 @@ def _validate_platforms(profiles):
 def get_platform(platform, profiles=None):
     label = str(platform or '').strip()
     if not label:
-        return '', {'aliases': [], 'templates': {}}
+        return '', blank_profile()
     if profiles is None:
         profiles = load_platforms()
     for canonical, profile in profiles.items():
         identifiers = [canonical, *profile['aliases']]
         if label.casefold() in {value.strip().casefold() for value in identifiers}:
             return canonical, profile
-    return label, {'aliases': [], 'templates': {}}
+    return label, blank_profile()
+
+
+def platform_code(platform, profiles=None):
+    """命名短码（IQY / TX / YK / BILI）：自定义平台未配置时退回平台名。"""
+    label, profile = get_platform(platform, profiles)
+    if not label:
+        return ''
+    return str(profile.get('code') or '').strip() or label
+
+
+def platform_display_name(platform, profiles=None):
+    """副标题里显示的中文名（爱奇艺 / 腾讯视频 / 优酷 / 哔哩哔哩）。"""
+    label, profile = get_platform(platform, profiles)
+    if not label:
+        return ''
+    return str(profile.get('display_name') or '').strip() or label
+
+
+def platform_tokens(platform, profiles=None):
+    """三个平台占位符的取值，供命名模板替换使用。"""
+    label, profile = get_platform(platform, profiles)
+    if not label:
+        return {'platform': '', 'platform_code': '', 'platform_name': ''}
+    return {
+        'platform': label,
+        'platform_code': str(profile.get('code') or '').strip() or label,
+        'platform_name': str(profile.get('display_name') or '').strip() or label,
+    }
 
 
 def normalize_platform_source(platform, source):
@@ -123,6 +216,14 @@ def normalize_platform_source(platform, source):
 
 
 def prepare_platform_template(template_key, template, platform, source):
+    """返回 (待渲染模板, 平台占位符取值)。
+
+    ``{platform}`` 保持旧行为：模板里没写平台时，自动插到 ``{source}`` 前面，
+    方便只维护一套通用模板。
+    ``{platform_code}`` / ``{platform_name}`` 只在模板显式使用时生效——
+    短码（IQY/TX/YK/BILI）进文件名与主标题，中文名（爱奇艺/腾讯视频）进副标题，
+    与 longpt-auto-publisher 的命名规则一致。
+    """
     label, profile = get_platform(platform)
     override = profile['templates'].get(template_key)
     if override is not None:
@@ -130,18 +231,23 @@ def prepare_platform_template(template_key, template, platform, source):
     elif (
         label
         and template_key.startswith(('file_name_', 'main_title_'))
-        and '{platform}' not in template
+        and not any(
+            token in template
+            for token in ('{platform}', '{platform_code}', '{platform_name}')
+        )
     ):
         separator = '.' if template_key.startswith('file_name_') else ' '
         template = template.replace('{source}', '{platform}' + separator + '{source}')
-    platform_token = label
+
+    tokens = platform_tokens(platform)
+    tokens['platform'] = label
     if label and '{source}' in template:
         for alias in [label, *profile['aliases']]:
             pattern = r'(?<![^\W_])' + re.escape(alias.strip()) + r'(?![^\W_])'
             if re.search(pattern, source, re.IGNORECASE):
-                platform_token = ''
+                tokens['platform'] = ''
                 break
-    return template, platform_token
+    return template, tokens
 
 
 def save_platform_templates(platform, templates):

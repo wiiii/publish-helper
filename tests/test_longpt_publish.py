@@ -1,3 +1,5 @@
+import pytest
+
 from src.longpt_publish import (
     TAG_VALUES,
     build_form,
@@ -93,3 +95,31 @@ def test_high_frame_detects_video_frame_rate_above_30fps():
 def test_overall_bitrate_parses_kbps_and_mbps():
     assert parse_overall_bitrate_mbps("Overall bit rate                    : 6 821 kb/s") == 6.821
     assert parse_overall_bitrate_mbps("Overall bit rate                    : 16.2 Mb/s") == 16.2
+
+
+def test_build_form_blocks_brand_tags_when_mediainfo_is_sdr(monkeypatch):
+    fields = {
+        "name": "X 2160p iQIYI WEB-DL",
+        "small_descr": "\u3010\u5e27\u7eee\u6620\u753bMAX\u30114K",
+        "descr": f"[quote]{MEDIAINFO}[/quote]",
+    }
+    with pytest.raises(ValueError, match='品牌词'):
+        build_form(fields)
+
+    monkeypatch.setenv('LONGPT_BRAND_TAG_CHECK', '0')
+    data, _tags = build_form(fields)
+    assert data['small_descr'].startswith('\u3010')
+
+
+def test_build_form_allows_brand_tags_on_real_hdr():
+    hdr_mediainfo = MEDIAINFO.replace(
+        "HDR format                          : SMPTE ST 2086, HDR10 compatible",
+        "Transfer characteristics            : PQ\n"
+        "HDR format                          : SMPTE ST 2086, HDR10 compatible",
+    )
+    data, _tags = build_form({
+        "name": "X",
+        "small_descr": "\u3010\u81fb\u5f69\u89c6\u542c\u30114K",
+        "descr": f"[quote]{hdr_mediainfo}[/quote]",
+    })
+    assert data['technical_info'].startswith('General')

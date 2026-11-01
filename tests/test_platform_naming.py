@@ -81,6 +81,33 @@ def test_partial_overrides_inherit_and_reload(platform_workspace, monkeypatch):
     assert render_name(monkeypatch, '{en_title}.{source}', 'iQIYI') == 'Example.iQIYI.WEB-DL'
 
 
+def test_platform_code_and_display_name_placeholders(platform_workspace, monkeypatch):
+    result = render_name(
+        monkeypatch, '{en_title}.{video_format}.{platform_code}.{source}', '爱奇艺',
+    )
+    assert result == 'Example.2160p.IQY.WEB-DL'
+    result = render_name(
+        monkeypatch, '{platform_name} | {en_title}', 'Tencent', key='second_title_tv',
+    )
+    assert result == '腾讯视频 | Example'
+    result = render_name(monkeypatch, '{en_title}.{platform_name}.{source}', '优酷')
+    assert result == 'Example.优酷.WEB-DL'
+    # 自定义平台没配短码时退回平台名，不留空
+    assert render_name(monkeypatch, '{platform_code}', '自定义台') == '自定义台'
+
+
+def test_platform_code_placeholder_does_not_duplicate_brand(platform_workspace, monkeypatch):
+    result = render_name(monkeypatch, '{en_title}.{platform_code}.{source}', 'NF')
+    assert result == 'Example.NF.WEB-DL'
+
+
+def test_custom_platform_can_override_code_and_display_name(platform_workspace):
+    save_platform_templates('Netflix', {'file_name_movie': '{platform_code}.{en_title}'})
+    profiles = load_platforms()
+    assert profiles['NF']['code'] == 'NF'
+    assert profiles['NF']['display_name'] == 'Netflix'
+
+
 def test_tv_episode_placeholder_and_playlet_source_are_independent(platform_workspace, monkeypatch):
     save_platform_templates('NF', {
         'file_name_tv': '{en_title}.S{season}E{episode}.{platform}.{source}',

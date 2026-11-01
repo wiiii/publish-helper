@@ -581,8 +581,10 @@ def get_name_from_template(english_title, original_title, season, episode, year,
                            quality_summary='', media_info=''):
     name = get_settings(template)  # 获取模板
     source = normalize_platform_source(platform, source)
-    name, platform_token = prepare_platform_template(template, name, platform, source)
-    name = name.replace('{platform}', platform_token)
+    name, platform_values = prepare_platform_template(template, name, platform, source)
+    # {platform} 品牌名、{platform_code} 短码（IQY/TX/YK/BILI）、{platform_name} 中文名
+    for key, value in platform_values.items():
+        name = name.replace('{' + key + '}', value)
     # 开始替换关键字
     name = name.replace('{en_title}', english_title)
     name = name.replace('{original_title}', original_title)

@@ -6,9 +6,12 @@ from src.core import rename
 from src.core.platforms import normalize_platform_source
 from src.core.release_metadata import (
     append_quality_note,
+    has_platform_brand_tag,
     normalize_hdr_format,
     parse_overall_bitrate_mbps,
     parse_video_frame_rate,
+    platform_brand_tier,
+    platform_brand_violations,
     resolution_from_dimensions,
 )
 
@@ -161,3 +164,32 @@ def test_publish_title_separators_keep_codec_and_channels(tmp_path, monkeypatch)
         '', '', '', '', '5.1', '', '', '', '', '', '', '', '', 'main_title_movie', platform='Tencent',
     )
     assert result == 'Example Title Tencent WEB-DL H.265 5.1'
+
+
+def test_brand_tags_require_hdr_evidence(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    # HDR 限定品牌词：SDR 源判违规，HDR 源放行
+    assert platform_brand_violations('【臻彩视听】4K', HIGH_SDR_MEDIAINFO)
+    assert platform_brand_violations('【臻彩视听】4K', HIGH_HDR_MEDIAINFO) == []
+    assert platform_brand_violations('iQIYI【帧绮映画MAX】4K', HIGH_SDR_MEDIAINFO)
+    # 帧享影院是入口档位（也提供 SDR 高码率），不算 HDR 宣称
+    assert platform_brand_violations('【帧享影院】4K', HIGH_SDR_MEDIAINFO) == []
+    assert has_platform_brand_tag('【帧享影院】4K') is False
+    assert has_platform_brand_tag('【臻彩视听】4K') is True
+
+
+def test_frame_120_needs_100fps(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    # 同一份 HDR 媒资，帧率 23.976，低于 120 帧档要求
+    assert platform_brand_violations('帧享 120 帧', HIGH_HDR_MEDIAINFO)
+    high_fps = HIGH_HDR_MEDIAINFO.replace('23.976 (24000/1001) FPS', '120.000 FPS')
+    assert platform_brand_violations('帧享 120 帧', high_fps) == []
+
+
+def test_platform_brand_tier_follows_media_info(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    assert platform_brand_tier('iQIYI', HIGH_HDR_MEDIAINFO) == '帧绮映画MAX'
+    assert platform_brand_tier('iQIYI', HIGH_SDR_MEDIAINFO) == ''
+    assert platform_brand_tier('腾讯', HIGH_HDR_MEDIAINFO) == '臻彩视听'
+    assert platform_brand_tier('优酷', HIGH_SDR_MEDIAINFO) == '帧享影院'
+    assert platform_brand_tier('NF', HIGH_HDR_MEDIAINFO) == ''
