@@ -1,0 +1,14 @@
+[flake8]
+# 从 pyproject.toml 的 [tool.flake8] 迁移而来：
+# pyproject-flake8 已停止维护（最后版本 5.0.4，只支持 flake8<6），
+# 升级到 flake8 7.x 后改用原生配置文件。
+max-line-length = 88
+extend-ignore = E203, W503
+per-file-ignores =
+    __init__.py: F401
+exclude =
+    .git,
+    __pycache__,
+    .venv,
+    build,
+    dist

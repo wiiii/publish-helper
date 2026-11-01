@@ -1,5 +1,5 @@
 [build-system]
-requires = ["flit_core==3.9.0"]
+requires = ["flit_core>=3.12,<5"]
 build-backend = "flit_core.buildapi"
 
 [project]
@@ -19,20 +19,26 @@ contributors = [
 ]
 requires-python = ">=3.9"
 dependencies = [
-    "Flask>=3.0.2",
-    "flask-cors>=3.0.10",
-    "PyQt6>=6.6.1",
-    "requests>=2.31.0",
-    "pillow>=10.3.0",
-    "numpy>=1.26.4",
-    "opencv-python>=4.9.0.80",
-    "pymediainfo>=6.1.0",
-    "torf>=4.2.6",
-    "pyperclip>=1.8.2",
-    "python-dotenv>=1.0.1",
-    "xpinyin>=0.7.6",
-    "click>=8.1.7",
+    "Flask>=3.1.3",
+    "flask-cors>=6.0.5",
+    "Werkzeug>=3.1.9",
+    "PyQt6>=6.11.0",
+    "requests>=2.34.2",
+    "urllib3>=2.8.0",
+    "certifi>=2026.10.23",
+    "pillow>=13.0.0",
+    "numpy>=2.5.4",
+    "opencv-python>=4.14.0.94",
+    "pymediainfo>=7.0.1",
+    "torf>=4.3.1",
+    "pyperclip>=1.11.0",
+    "python-dotenv>=1.2.4",
+    "pypinyin>=0.55.0",
+    "click>=8.5.0",
     "colorama>=0.4.6",
+    "prompt_toolkit>=3.0.53",
+    "Jinja2>=3.1.6",
+    "MarkupSafe>=3.0.4",
 ]
 keywords = ["pt", "torrent", "media", "publishing", "automation"]
 classifiers = [
@@ -139,8 +145,3 @@ exclude_lines = [
     "if __name__ == .__main__.:",
     "raise NotImplementedError",
 ]
-
-[tool.flake8]
-max-line-length = 88
-ignore = ["E203", "W503"]
-per-file-ignores = ["__init__.py:F401"]

@@ -1,32 +1,36 @@
 # Development and testing dependencies
+#
+# 与运行时依赖同步升级（2026-10）。本轮变更：
+#   - 移除 pyproject-flake8（停止维护，只支持 flake8<6），
+#     flake8 配置迁移到项目根目录 .flake8
+#   - mypy 停在 1.x 末版：2.x 刚发布，第三方 stub 生态尚未跟上
+#   - black / isort / flake8 需与 .pre-commit-config.yaml 中钩子版本保持一致
 
 # Code formatting and linting
-black==23.12.0
-isort==5.13.1
-flake8==5.0.4
-pyproject-flake8==5.0.4
-pre-commit==3.6.0
+black==26.10.1
+isort==9.0.2
+flake8==7.4.1
+pre-commit==4.7.0
 
 # Type checking
-mypy==1.8.0
-types-requests==2.31.0.20240106
+mypy==1.20.2
+types-requests==2.33.0.20261006
 
 # Testing
-pytest==7.4.3
-pytest-cov==4.1.0
-pytest-mock==3.12.0
-httpx==0.24.1
-coverage==7.2.7
+pytest==9.1.1
+pytest-cov==7.1.0
+pytest-mock==3.17.0
+httpx==0.28.1
+coverage==7.17.0
 
 # Documentation
-sphinx==7.2.6
-sphinx-rtd-theme==2.0.0
+sphinx==9.1.1
+sphinx-rtd-theme==3.1.0
 
 # Package building
-flit==3.9.0
-build==1.0.3
+flit==4.1.0
+build==1.6.1
 
 # Security scanning
-bandit==1.7.5
-safety==3.0.0
-
+bandit==1.9.4
+safety==3.8.1

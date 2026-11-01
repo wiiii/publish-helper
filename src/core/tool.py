@@ -670,7 +670,7 @@ def natural_keys(text):
     """
     alist.sort(key=natural_keys) 使用这个函数作为key来按数字顺序排序文本
     """
-    return [int(c) if c.isdigit() else c.lower() for c in re.split('(\d+)', text)]
+    return [int(c) if c.isdigit() else c.lower() for c in re.split(r'(\d+)', text)]
 
 
 def get_video_files(folder_path):

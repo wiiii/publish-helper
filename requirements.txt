@@ -1,45 +1,55 @@
-# Standard library requirements
-# Core Python packages for the application
+# ---------------------------------------------------------------------------
+# 运行时依赖（精确钉版本，保证打包可复现）
+#
+# 升级原则（2026-10 全量升级）：
+#   1. 只钉顶层依赖，让 PyQt6 / Flask 自己约束配套包（Qt6、sip、Werkzeug、
+#      Jinja2 等），避免手工钉死配套版本后与顶层包互相踩。
+#   2. 版本下限要能兼容同一台机器上的其他项目（pywidevine / pyplayready /
+#      videofetch）：requests>=2.32.5、urllib3<3、click>=8.3.1；
+#      并且本项目不再引入 protobuf / pycryptodome / cryptography / PyYAML，
+#      从源头避免“装本项目就把别人的库降级”。
+#   3. 移除未使用依赖：
+#      - xpinyin：代码只用 pypinyin（src/core/tool.py:9），xpinyin 零引用
+#      - flatbencode：torf 4.x 自带 torf/_flatbencode.py，外部包是 torf 3.x 遗留
+# ---------------------------------------------------------------------------
 
 # Web framework
-Flask==3.0.2
-flask-cors==3.0.10
-Werkzeug==3.0.2
+Flask==3.1.3
+flask-cors==6.0.5
+Werkzeug==3.1.9
 
-# GUI framework
-PyQt6==6.6.1
-PyQt6-Qt6==6.6.2
-PyQt6-sip==13.6.0
+# GUI framework（Qt6 / sip 由 PyQt6 自行约束，此处不钉死）
+PyQt6==6.11.0
 
 # Media processing
-opencv-python==4.9.0.80
-pillow==10.3.0
-pymediainfo==6.1.0
-numpy==1.26.4
+# opencv 4.14 是 4.x 末版，已提供 numpy 2.x 的 cp312 wheel；
+# 5.0 刚发布，VideoCapture 后端行为未经验证，暂不跟进
+opencv-python==4.14.0.94
+pillow==13.0.0
+pymediainfo==7.0.1
+numpy==2.5.4
 
-# Torrent handling
-torf==4.2.6
-flatbencode==0.2.1
+# Torrent handling（torf 4.3.1 内置 bencode 实现）
+torf==4.3.1
 
 # HTTP requests
-requests==2.31.0
-urllib3==2.2.1
-certifi==2024.2.2
+requests==2.34.2
+urllib3==2.8.0
+certifi==2026.10.23
 
 # Utilities
-python-dotenv==1.0.1
-pyperclip==1.8.2
-xpinyin==0.7.6
+python-dotenv==1.2.4
+# 1.8.2 会与 mitmproxy(>=1.9.0) 冲突；1.11.0 同时满足 mitmproxy 的 <=1.11.0 上限。
+# 仅使用 pyperclip.copy()，1.8.x -> 1.11.x 无 API 变更。
+pyperclip==1.11.0
 pypinyin==0.55.0
-click==8.1.7
+click==8.5.0
 colorama==0.4.6
-prompt_toolkit==3.0.52
+prompt_toolkit==3.0.53
 
 # Template engine
-Jinja2==3.1.3
-MarkupSafe==2.1.5
+Jinja2==3.1.6
+MarkupSafe==3.0.4
 
 # Development dependencies (optional)
 # Install with: pip install -r requirements-dev.txt
-
-pyperclip

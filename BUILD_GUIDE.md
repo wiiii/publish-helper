@@ -26,19 +26,22 @@ dist\Publish Helper.exe
 
 ### 1. 安装依赖
 
-确保已安装 Python 3.9 或更高版本，然后安装依赖：
+确保已安装 Python 3.9 或更高版本，**先在虚拟环境里安装依赖**（直接装到全局 Python 会把别的项目的库降级，例如 requests / click / pyperclip）：
 
 ```bash
-pip install -r requirements.txt
-pip install pyinstaller
+python -m venv .venv
+.venv\Scripts\python.exe -m pip install -r requirements.txt
+.venv\Scripts\python.exe -m pip install pyinstaller
 ```
+
+`build.bat` / `build.ps1` 会自动优先使用项目内的 `.venv`，检测不到时才回退到全局 Python。
 
 ### 2. 执行 PyInstaller
 
 在项目根目录下执行：
 
 ```bash
-pyinstaller --clean publish-helper.spec
+.venv\Scripts\python.exe -m PyInstaller --clean publish-helper.spec
 ```
 
 ## PyInstaller 配置
