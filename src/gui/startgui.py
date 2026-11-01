@@ -20,6 +20,7 @@ from src.core.mediainfo import get_media_info
 from src.core.picturebed import upload_picture
 from src.core.ptgen import get_pt_gen_description
 from src.core.platforms import get_platform, load_platforms, save_platform_templates
+from src.core.release_metadata import has_platform_brand_tag, platform_brand_violations
 from src.core.rename import get_pt_gen_info, get_video_info, get_name_from_template, rename_file, rename_folder, \
     move_file_to_folder, create_hard_link
 from src.core.screenshot import get_screenshot, get_thumbnail
@@ -28,6 +29,7 @@ from src.core.tool import update_settings, get_settings, check_path_and_find_vid
     get_video_files, is_filename_too_long, get_playlet_description, delete_season_number, \
     get_combo_box_data, validate_and_convert_to_int
 from src.gui.ui.mainwindow import Ui_Mainwindow
+from src.gui.ui.layout_polish import apply as apply_ui_polish
 from src.gui.ui.settings import Ui_Settings
 from src.gui.ui.toast import show_toast
 from src.gui.ui_tools import get_video_file_path, get_folder_path, get_picture_file_path
@@ -66,7 +68,11 @@ class PlatformRulesDialog(QDialog):
         self.setWindowTitle(f'{self.platform} 平台命名规则')
         self.resize(850, 240)
         layout = QVBoxLayout(self)
-        help_text = QLabel('留空时继承通用模板。支持 {platform}、{source} 等占位符；保存后下次生成名称时生效。')
+        help_text = QLabel(
+            '留空时继承通用模板。可用占位符：{platform} 平台品牌名（iQIYI / Tencent）、'
+            '{platform_code} 命名短码（IQY / TX / YK / BILI）、'
+            '{platform_name} 中文名（爱奇艺 / 腾讯视频）、{source} 片源等；保存后下次生成名称时生效。'
+        )
         help_text.setWordWrap(True)
         layout.addWidget(help_text)
         form = QFormLayout()
@@ -175,6 +181,10 @@ class mainwindow(QMainWindow, Ui_Mainwindow):
         self.makeTorrentButtonPlaylet.clicked.connect(self.make_torrent_button_playlet_clicked)
         self.startButtonPlaylet.clicked.connect(self.start_button_playlet_clicked)
         self.autoFeedButtonPlaylet.clicked.connect(self.auto_feed_button_playlet_clicked)
+
+        # 统一栅格与视觉规范（必须放在 initialize_* 之后：
+        # initialize_platform_comboboxes 会动态生成平台下拉框、标签与命名规则按钮）
+        apply_ui_polish(self)
 
         # 初始化成功
         self.debugBrowserMovie.append(
@@ -865,6 +875,9 @@ class mainwindow(QMainWindow, Ui_Mainwindow):
                     self.mainTitleBrowserMovie.setText(main_title)
                     self.secondTitleBrowserMovie.setText(second_title)
                     self.fileNameBrowserMovie.setText(file_name)
+                    self.warn_platform_brand_tags(
+                        self.debugBrowserMovie, video_path, self.platformMovie.currentText(),
+                        main_title, second_title)
 
                     if do_create_hard_link:
                         print('开始创建硬链接')
@@ -953,6 +966,27 @@ class mainwindow(QMainWindow, Ui_Mainwindow):
             print(f'启动PtGen线程成功，但是重命名出错：{e}')
             get_name_movie_failure_number += 1
             return False, [f'启动PtGen线程成功，但是重命名出错：{e}']
+
+    def warn_platform_brand_tags(self, browser, video_path, platform, *titles):
+        """副标题/标题带平台高画质品牌词时，校验媒资能不能撑住。
+
+        帧绮映画MAX / 臻彩视听 / 帧享 这类品牌名本身就在宣称 HDR 体验，
+        SDR 源写上去会被站点判为「描述与实际不符」。这里只提示，不阻断。
+        """
+        text = ' '.join(str(title or '') for title in titles)
+        platform = str(platform or '').strip()
+        if not platform or not has_platform_brand_tag(text):
+            return
+        media_info = get_platform_media_info(video_path, platform)
+        problems = platform_brand_violations(text, media_info)
+        if not problems:
+            return
+        message = '命名里的平台高画质品牌词与媒资不符：\n' + '\n'.join(f'· {item}' for item in problems)
+        browser.append(message)
+        QMessageBox.warning(
+            self, '画质标签与媒资不符',
+            message + '\n\n请改用媒资能支撑的写法，或换成真 HDR 源再发布。',
+        )
 
     def make_torrent_button_movie_clicked(self):
         self.torrent_url = ''
@@ -1596,6 +1630,9 @@ class mainwindow(QMainWindow, Ui_Mainwindow):
                     self.mainTitleBrowserTV.setText(main_title)
                     self.secondTitleBrowserTV.setText(second_title)
                     self.fileNameBrowserTV.setText(file_name)
+                    self.warn_platform_brand_tags(
+                        self.debugBrowserTV, video_path, self.platformTV.currentText(),
+                        main_title, second_title)
 
                     if do_create_hard_link:
                         print('开始创建硬链接')
@@ -2123,6 +2160,9 @@ class mainwindow(QMainWindow, Ui_Mainwindow):
                     self.mainTitleBrowserPlaylet.setText(main_title)
                     self.secondTitleBrowserPlaylet.setText(second_title)
                     self.fileNameBrowserPlaylet.setText(file_name)
+                    self.warn_platform_brand_tags(
+                        self.debugBrowserPlaylet, video_path, self.platformPlaylet.currentText(),
+                        main_title, second_title)
 
                     if do_create_hard_link:
                         print('开始创建硬链接')
